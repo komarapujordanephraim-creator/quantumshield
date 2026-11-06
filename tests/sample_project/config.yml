@@ -1,0 +1,3 @@
+tls_versions: [TLSv1.0, TLSv1.2]
+cipher: AES-128-GCM
+ssh_authorized: ssh-rsa AAAAB3NzaC1yc2E demo@example

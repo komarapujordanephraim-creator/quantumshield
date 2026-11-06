@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantumshield"
+version = "0.1.0"
+description = "Find quantum-vulnerable cryptography in source code and plan post-quantum migration."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Komarapu Jordan Ephraim" }]
+keywords = ["post-quantum", "cryptography", "security", "scanner", "crypto-agility"]
+
+[project.scripts]
+quantumshield = "quantumshield.cli:main"
+
+[tool.setuptools]
+packages = ["quantumshield"]
