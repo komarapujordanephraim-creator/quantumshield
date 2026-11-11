@@ -134,6 +134,11 @@ def _italic_last_word(text: str) -> str:
 
 
 def html_report(result: ScanResult) -> str:
+    from .report3d import html_report_3d
+    return html_report_3d(result, summarize(result), DISCLAIMER)
+
+
+def _html_report_legacy(result: ScanResult) -> str:
     summary = summarize(result)
     sev = summary["by_severity"]
     info_count = sum(1 for f in result.findings if f.severity == "info")
