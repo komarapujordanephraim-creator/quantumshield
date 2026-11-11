@@ -97,6 +97,20 @@ class ReportTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;", page)
 
 
+class RegressionTests(unittest.TestCase):
+    def test_authorized_keys_without_extension_is_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "authorized_keys").write_text("ssh-rsa AAAAB3NzaC1yc2E deploy@demo\n")
+            ids = {f.rule_id for f in scan_path(tmp).findings}
+        self.assertIn("QS006", ids)
+
+    def test_terraform_tls_policy_name_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "main.tf").write_text('ssl_policy = "ELBSecurityPolicy-TLS-1-0-2015-04"\n')
+            ids = {f.rule_id for f in scan_path(tmp).findings}
+        self.assertIn("QS010", ids)
+
+
 class CliTests(unittest.TestCase):
     def test_exit_code_fails_on_high(self):
         code, _, _ = run_cli(["scan", str(SAMPLE)])
