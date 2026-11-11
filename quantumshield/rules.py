@@ -165,7 +165,7 @@ RULES = [
         "Legacy SSL/TLS protocol version",
         "medium",
         "classical",
-        r"SSLv2|SSLv3|TLSv?1\.[01]\b|PROTOCOL_TLSv1(_1)?\b|\bTLSv1(_1)?_method",
+        r"SSLv2|SSLv3|TLSv?1\.[01]\b|PROTOCOL_TLSv1(_1)?\b|\bTLSv1(_1)?_method|\bTLS[-_]1[-_][01]\b",
         "SSLv2, SSLv3, TLS 1.0 and TLS 1.1 are deprecated and have known "
         "weaknesses.",
         "Require TLS 1.2 or TLS 1.3 only.",

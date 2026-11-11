@@ -23,7 +23,10 @@ TEXT_EXTENSIONS = {
     ".gradle", ".dockerfile",
 }
 
-TEXT_FILENAMES = {"dockerfile", "makefile", ".env", "nginx.conf"}
+TEXT_FILENAMES = {
+    "dockerfile", "makefile", ".env", "nginx.conf",
+    "authorized_keys", "known_hosts", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
+}
 
 MAX_FILE_BYTES = 1_000_000
 IGNORE_MARKER = "quantumshield: ignore"
