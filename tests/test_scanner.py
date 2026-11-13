@@ -141,3 +141,44 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DependencyTests(unittest.TestCase):
+    def _scan(self, files):
+        import tempfile, os
+        from quantumshield.scanner import scan_path
+        with tempfile.TemporaryDirectory() as d:
+            for name, body in files.items():
+                p = os.path.join(d, name)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as fh:
+                    fh.write(body)
+            return scan_path(d)
+
+    def test_python_requirements(self):
+        r = self._scan({"requirements.txt": "django==5.0\npycrypto==2.6.1\nrsa>=4.9\n# ecdsa\ncryptography\n"})
+        ids = {f.rule_id for f in r.findings}
+        self.assertIn("QSD001", ids)
+        self.assertIn("QSD002", ids)
+        self.assertIn("QSD004", ids)
+        self.assertNotIn("QSD003", ids)  # commented out
+
+    def test_python_no_false_match(self):
+        r = self._scan({"requirements.txt": "rsa-tools==1.0\ncryptography-extras\n"})
+        self.assertEqual([f.rule_id for f in r.findings if f.rule_id.startswith("QSD")], [])
+
+    def test_npm_and_pqc(self):
+        body = '{"dependencies": {"crypto-js": "^4.2.0", "@noble/post-quantum": "0.2.0", "express": "4"}}'
+        r = self._scan({"package.json": body})
+        cats = {f.rule_id: f.category for f in r.findings}
+        self.assertEqual(cats.get("QSD101"), "classical")
+        self.assertEqual(cats.get("QSD109"), "pqc")
+
+    def test_go_maven_cargo(self):
+        r = self._scan({
+            "go.mod": "module x\n\nrequire (\n\tgolang.org/x/crypto v0.21.0\n)\n",
+            "pom.xml": "<artifactId>bcprov-jdk18on</artifactId>",
+            "Cargo.toml": "[dependencies]\nrsa = \"0.9\"\n",
+        })
+        ids = {f.rule_id for f in r.findings}
+        self.assertTrue({"QSD201", "QSD401", "QSD301"} <= ids)
