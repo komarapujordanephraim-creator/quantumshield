@@ -51,7 +51,7 @@ Exit codes: `0` ok, `1` findings at or above `--fail-on`, `2` usage error.
 
 Suppress a line you have reviewed by adding `quantumshield: ignore` in a comment on that line.
 
-## What it detects (v0.1)
+## What it detects (v0.2)
 
 | ID | Finding | Severity | Type |
 |---|---|---|---|
@@ -68,12 +68,27 @@ Suppress a line you have reviewed by adding `quantumshield: ignore` in a comment
 | QS011 | Private key committed to source | critical | classical |
 | QS100 | Post-quantum algorithm referenced | info | pqc |
 
+### New in v0.2: dependency-level discovery
+
+Many projects never call RSA or ECC directly: a library does it for them. QuantumShield now reads dependency manifests and lists the crypto libraries a project pulls in.
+
+Manifests: `requirements*.txt`, `pyproject.toml`, `Pipfile`, `setup.cfg`, `package.json`, `go.mod`, `Cargo.toml`, `pom.xml`, `build.gradle`, `Gemfile`, `composer.json`.
+
+| Signal | Example | Severity |
+|---|---|---|
+| Unmaintained / discontinued crypto library | `pycrypto`, `crypto-js` | high / medium |
+| Library that exists to do RSA or ECC | `rsa`, `ecdsa`, `node-rsa`, `elliptic`, `jsrsasign` | medium |
+| General crypto, JWT, SSH libraries | `cryptography`, `PyJWT`, `golang.org/x/crypto`, Bouncy Castle | low |
+| Post-quantum libraries (migration already started) | `liboqs-python`, `@noble/post-quantum`, `cloudflare/circl` | info |
+
+Rule IDs start with `QSD`. Only package names are matched, not versions. Try it: `python -m quantumshield scan examples/deps_demo`.
+
 Languages and files covered: Python, JavaScript/TypeScript, Java, Kotlin, Go, Ruby, PHP, C#, C/C++, Rust, Swift, shell, YAML, JSON, TOML, INI, Terraform, PEM and common config files.
 
 ## Limitations (read this)
 
 - Detection is **pattern-based**, line by line. It does not parse code or follow data flow.
-- It can **miss** crypto used through wrappers, dependencies or runtime configuration, and it can **flag** harmless code (for example a string in a comment).
+- It can **miss** crypto used through wrappers, transitive dependencies or runtime configuration, and it can **flag** harmless code (for example a string in a comment).
 - It does not scan compiled binaries, container images or network traffic.
 - A clean result does **not** prove a system is quantum-safe.
 - Severity reflects general guidance, not your specific threat model.
@@ -87,8 +102,8 @@ python -m unittest discover -s tests -t . -v
 ## Roadmap
 
 - [x] v0.1 Pattern scanner, text/JSON/HTML reports, CI exit codes
-- [ ] v0.2 Per-language parsing (Python AST) to reduce false positives
-- [ ] v0.3 Dependency manifest checks (requirements.txt, package.json)
+- [x] v0.2 Dependency manifest checks (Python, npm, Go, Rust, Java, Ruby, PHP)
+- [ ] v0.3 Per-language parsing (Python AST) and lockfile / transitive dependencies
 - [ ] v0.4 SARIF output and a reusable GitHub Action
 
 ## Credits and license
