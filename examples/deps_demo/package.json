@@ -1,0 +1,9 @@
+{
+  "name": "demo-web",
+  "dependencies": {
+    "express": "4.19.2",
+    "crypto-js": "4.2.0",
+    "jsonwebtoken": "9.0.2",
+    "@noble/post-quantum": "0.2.1"
+  }
+}

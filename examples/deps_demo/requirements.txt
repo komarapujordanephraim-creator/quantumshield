@@ -1,0 +1,5 @@
+django==5.0.6
+pycrypto==2.6.1
+cryptography==43.0.0
+pyjwt==2.9.0
+liboqs-python==0.10.0
