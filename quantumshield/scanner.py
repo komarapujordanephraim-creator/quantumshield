@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 from .rules import RULES, SEVERITY_ORDER
+from .deps import is_manifest, scan_manifest
 
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "node_modules", "venv", ".venv", "env",
@@ -64,7 +65,7 @@ class ScanResult:
 
 def _is_candidate(path: Path) -> bool:
     name = path.name.lower()
-    return path.suffix.lower() in TEXT_EXTENSIONS or name in TEXT_FILENAMES
+    return path.suffix.lower() in TEXT_EXTENSIONS or name in TEXT_FILENAMES or is_manifest(name)
 
 
 def _looks_binary(sample: bytes) -> bool:
@@ -145,6 +146,8 @@ def scan_path(path: str, exclude: Iterable[str] = ()) -> ScanResult:
         result.files_scanned += 1
         text = data.decode("utf-8", errors="replace")
         result.findings.extend(scan_text(text, display))
+        if is_manifest(full.name):
+            result.findings.extend(scan_manifest(text, display, Finding))
     result.findings.sort(
         key=lambda f: (-SEVERITY_ORDER[f.severity], f.file, f.line, f.rule_id)
     )

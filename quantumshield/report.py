@@ -28,6 +28,7 @@ CATEGORY_LABEL = {
     "quantum": "Quantum-vulnerable",
     "classical": "Classically weak / hygiene",
     "pqc": "Post-quantum references",
+    "dependency": "Crypto libraries in dependencies",
 }
 
 ANSI = {
@@ -208,7 +209,7 @@ def _html_report_legacy(result: ScanResult) -> str:
         grouped.setdefault(f.category, []).append(f)
     if not result.findings:
         p.append("<div class='empty glass'>No findings from this rule set.</div>")
-    for cat in ("quantum", "classical", "pqc"):
+    for cat in ("quantum", "classical", "dependency", "pqc"):
         items = grouped.get(cat)
         if not items:
             continue
