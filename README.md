@@ -81,14 +81,36 @@ Manifests: `requirements*.txt`, `pyproject.toml`, `Pipfile`, `setup.cfg`, `packa
 | General crypto, JWT, SSH libraries | `cryptography`, `PyJWT`, `golang.org/x/crypto`, Bouncy Castle | low |
 | Post-quantum libraries (migration already started) | `liboqs-python`, `@noble/post-quantum`, `cloudflare/circl` | info |
 
-Rule IDs start with `QSD`. Only package names are matched, not versions. Try it: `python -m quantumshield scan examples/deps_demo`.
+Rule IDs start with `QSD`. Try it: `python -m quantumshield scan examples/deps_demo`.
+
+### New in v0.3: lockfiles, versions and transitive dependencies
+
+A manifest only shows what a project asks for. The lockfile shows what actually gets installed. QuantumShield now reads lockfiles, so findings include the **locked version** and catch crypto libraries that arrive **through other packages**.
+
+Lockfiles: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock` (classic and Berry), `pnpm-lock.yaml`, `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `Cargo.lock`, `go.sum`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`.
+
+- `(locked)`: the project names the package directly; the finding shows the exact version.
+- `(transitive)`: the package is only in the lockfile, so another dependency pulls it in.
+
+Example from a real npm project that only asks for `jsonwebtoken` and `crypto-browserify`:
+
+```text
+[MEDIUM] QSD103 ECC library: elliptic (transitive)
+    package-lock.json:345
+    elliptic 6.6.1
+[LOW] QSD106 JWT library: jsonwebtoken (locked)
+    package-lock.json:603
+    jsonwebtoken 9.0.3
+```
+
+Lockfiles are parsed line by line with no extra dependencies, and nothing from the project is executed. Try it: `python -m quantumshield scan examples/lockfile_demo`.
 
 Languages and files covered: Python, JavaScript/TypeScript, Java, Kotlin, Go, Ruby, PHP, C#, C/C++, Rust, Swift, shell, YAML, JSON, TOML, INI, Terraform, PEM and common config files.
 
 ## Limitations (read this)
 
 - Detection is **pattern-based**, line by line. It does not parse code or follow data flow.
-- It can **miss** crypto used through wrappers, transitive dependencies or runtime configuration, and it can **flag** harmless code (for example a string in a comment).
+- It can **miss** crypto used through wrappers or runtime configuration, and transitive dependencies when no lockfile is committed, and it can **flag** harmless code (for example a string in a comment).
 - It does not scan compiled binaries, container images or network traffic.
 - A clean result does **not** prove a system is quantum-safe.
 - Severity reflects general guidance, not your specific threat model.
@@ -103,7 +125,8 @@ python -m unittest discover -s tests -t . -v
 
 - [x] v0.1 Pattern scanner, text/JSON/HTML reports, CI exit codes
 - [x] v0.2 Dependency manifest checks (Python, npm, Go, Rust, Java, Ruby, PHP)
-- [ ] v0.3 Per-language parsing (Python AST) and lockfile / transitive dependencies
+- [x] v0.3 Lockfiles: locked versions and transitive dependencies (npm, yarn, pnpm, Poetry, uv, PDM, Pipenv, Cargo, Go, Composer, Bundler, Gradle)
+- [ ] Per-language parsing (Python AST)
 - [ ] v0.4 SARIF output and a reusable GitHub Action
 
 ## Credits and license
