@@ -7,7 +7,10 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Iterable, List
 
-from .rules import RULES, SEVERITY_ORDER
+import re
+
+from .pem import pem_blocks
+from .rules import RULES, RULES_BY_ID, SEVERITY_ORDER
 from .deps import is_manifest, scan_manifest
 from .lockfiles import MAX_LOCKFILE_BYTES, is_lockfile, mark_transitive, scan_lockfile
 
@@ -100,14 +103,62 @@ def _iter_files(root: Path, exclude: Iterable[str]):
             yield full, rel_posix
 
 
+_COMMENT_START = ("#", "//", "/*", "*", "--", ";", "<!--", "rem ", "REM ")
+_C_DIRECTIVE = re.compile(r"^#\s*(include|define|if|ifdef|ifndef|elif|pragma)\b")
+_NOT_A_USE = re.compile(
+    r"\b(removed|deprecated|no longer|not (available|supported|offered|accepted|allowed|called|used)"
+    r"|rejected|skipping|blocked|banned|disabled?|forbidden|disallowed|replaced|moved to|expected an?)\b|>&2|\bstderr\b"
+    r"|['\"]\s*:\s*false\b|=\s*false\b|^\s*#\s*undef\b|(?<![\w-])[!-][a-zA-Z]?[A-Z0-9][\w-]*\s*$",
+    re.IGNORECASE,
+)
+
+
+# A v0.4 rule is skipped on a line where the older, more specific rule already fired.
+_COVERED_BY = {"QS012": {"QS001", "QS005", "QS006"}, "QS014": {"QS004"}, "QS015": {"QS002"},
+               "QS017": {"QS008"}, "QS101": {"QS100"}}
+
+
+def is_not_a_use(line: str) -> bool:
+    """Heuristic: the line mentions an algorithm without using it.
+
+    Comments, log messages about removal or rejection, disabled entries
+    ("X": False) and removals in algorithm lists ("!kRSA", "-X25519MLKEM768").
+    Committed private keys (QS011) are always reported regardless.
+    """
+    s = line.strip()
+    if s.startswith(_COMMENT_START) and not _C_DIRECTIVE.match(s):
+        return True
+    if _NOT_A_USE.search(s):
+        return True
+    return bool(re.search(r"[:\"',\s][!-][a-zA-Z0-9]*(RSA|DH|DSS|DSA|ECDH|ECDSA|EC|MLKEM|X25519|ED25519)\w*", s, re.IGNORECASE)
+                and re.search(r"(cipher|group|kex|curve|sigalg|algorithm|list)", s, re.IGNORECASE))
+
+
 def scan_text(text: str, display_name: str) -> List[Finding]:
     """Scan a block of text and return findings."""
     findings: List[Finding] = []
+    pem_rule = RULES_BY_ID["QS018"]
+    for lineno, label, fam in pem_blocks(text):
+        pqc = fam in ("ML-KEM", "ML-DSA", "SLH-DSA")
+        findings.append(Finding(
+            rule_id="QS018", title=f"{fam} key inside PEM block ({label})",
+            severity="info" if pqc else pem_rule.severity, category="pqc" if pqc else "quantum",
+            file=display_name, line=lineno, snippet=f"-----BEGIN {label}----- ({fam})",
+            why=pem_rule.why if not pqc else "Post-quantum key: migration has started here.",
+            fix=pem_rule.fix if not pqc else "No action required from this finding.",
+        ))
     for lineno, line in enumerate(text.splitlines(), start=1):
         if IGNORE_MARKER in line.lower():
             continue
+        skip_uses = is_not_a_use(line)
+        fired = set()
         for rule in RULES:
+            if skip_uses and rule.rule_id != "QS011":
+                continue
+            if _COVERED_BY.get(rule.rule_id, set()) & fired:
+                continue
             if rule.pattern.search(line):
+                fired.add(rule.rule_id)
                 snippet = line.strip()
                 if len(snippet) > SNIPPET_LIMIT:
                     snippet = snippet[: SNIPPET_LIMIT - 3] + "..."
