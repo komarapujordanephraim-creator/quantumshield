@@ -329,8 +329,9 @@ class V04RuleTests(unittest.TestCase):
     def test_generic_pem_labels_are_decoded(self):
         self.assertEqual(self._pem(self.PEM_ED25519), [(1, "EdDSA key inside PEM block (PUBLIC KEY)")])
         self.assertEqual(self._pem(self.PEM_RSA_PUB), [(1, "RSA key inside PEM block (PUBLIC KEY)")])
-        # certificates report the signature algorithm
-        self.assertEqual(self._pem(self.PEM_EC_CERT), [(1, "ECDSA key inside PEM block (CERTIFICATE)")])
+        # certificates report the signature algorithm and the subject key separately
+        self.assertEqual(self._pem(self.PEM_EC_CERT), [(1, "ECDSA certificate signature inside PEM block (CERTIFICATE)"),
+                                                       (1, "EC certificate subject key inside PEM block (CERTIFICATE)")])
 
     def test_pem_line_number_inside_file(self):
         text = "config:\n  key: |\n" + self.PEM_ED25519
