@@ -28,7 +28,7 @@ Catalogue: ShorList 0.3.0, commit `65377e2c9ba6362316aa586a1506d7f18088dd8a`.
 
 - New rules for TLS cipher suites, signature schemes, groups, key types, OIDs and curve names (QS012-QS017, QS101).
 - PEM blocks with generic labels (`PRIVATE KEY`, `PUBLIC KEY`, `CERTIFICATE`) are decoded and the algorithm
-  OID inside is reported (QS018). Certificates report their signature algorithm.
+  OID inside is reported (QS018). Certificates report the signature algorithm and the subject key as separate findings.
 - Lines that mention an algorithm without using it are not reported: comments, removal or rejection
   messages, disabled entries (`"X": False`) and removals in algorithm lists (`-X25519MLKEM768`, `!kRSA`).
   Committed private keys are always reported.
