@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -182,3 +183,98 @@ class DependencyTests(unittest.TestCase):
         })
         ids = {f.rule_id for f in r.findings}
         self.assertTrue({"QSD201", "QSD401", "QSD301"} <= ids)
+
+
+class LockfileTests(unittest.TestCase):
+    """v0.3: lockfiles give versions and transitive dependencies."""
+
+    def _scan(self, files):
+        with tempfile.TemporaryDirectory() as d:
+            for name, body in files.items():
+                p = os.path.join(d, name)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as fh:
+                    fh.write(body)
+            return scan_path(d)
+
+    def _by_id(self, result):
+        return {f.rule_id: f for f in result.findings if f.rule_id.startswith("QSD")}
+
+    NPM_LOCK_V3 = (
+        '{\n  "name": "app",\n  "lockfileVersion": 3,\n  "packages": {\n'
+        '    "": {\n      "name": "app",\n      "dependencies": {\n        "jsonwebtoken": "^9.0.0"\n      }\n    },\n'
+        '    "node_modules/jsonwebtoken": {\n      "version": "9.0.2",\n      "dependencies": {\n        "jws": "^3.2.2"\n      }\n    },\n'
+        '    "node_modules/browserify-sign/node_modules/elliptic": {\n      "version": "6.5.4"\n    }\n  }\n}\n'
+    )
+
+    def test_npm_lock_transitive_and_locked(self):
+        r = self._scan({
+            "package.json": '{"dependencies": {"jsonwebtoken": "^9.0.0"}}',
+            "package-lock.json": self.NPM_LOCK_V3,
+        })
+        lock = {f.rule_id: f for f in r.findings if f.file == "package-lock.json"}
+        self.assertIn("QSD103", lock)  # elliptic, nested
+        self.assertTrue(lock["QSD103"].title.endswith("(transitive)"))
+        self.assertEqual(lock["QSD103"].snippet, "elliptic 6.5.4")
+        self.assertTrue(lock["QSD106"].title.endswith("(locked)"))  # also in package.json
+        self.assertEqual(lock["QSD106"].snippet, "jsonwebtoken 9.0.2")
+
+    def test_npm_lock_ignores_dependency_ranges(self):
+        # "requires"/"dependencies" maps inside a package are ranges, not installs
+        r = self._scan({"package-lock.json": self.NPM_LOCK_V3.replace('"jws"', '"node-rsa"')})
+        self.assertNotIn("QSD102", self._by_id(r))
+
+    def test_yarn_classic_and_berry(self):
+        classic = (
+            '# yarn lockfile v1\n\n'
+            '"@noble/curves@^1.2.0", "@noble/curves@~1.2.0":\n  version "1.2.0"\n  resolved "x"\n\n'
+            'crypto-js@^4.1.1:\n  version "4.2.0"\n'
+        )
+        berry = '__metadata:\n  version: 6\n\n"node-rsa@npm:^1.1.1":\n  version: 1.1.1\n  resolution: "node-rsa@npm:1.1.1"\n'
+        ids = set(self._by_id(self._scan({"a/yarn.lock": classic, "b/yarn.lock": berry})))
+        self.assertTrue({"QSD108", "QSD101", "QSD102"} <= ids)
+
+    def test_pnpm_lock(self):
+        body = (
+            "lockfileVersion: '9.0'\n\npackages:\n\n"
+            "  '@noble/post-quantum@0.2.1':\n    resolution: {integrity: sha512-x}\n\n"
+            "  elliptic@6.5.7:\n    resolution: {integrity: sha512-y}\n"
+        )
+        f = self._by_id(self._scan({"pnpm-lock.yaml": body}))
+        self.assertEqual(f["QSD109"].category, "pqc")
+        self.assertEqual(f["QSD103"].snippet, "elliptic 6.5.7")
+
+    def test_poetry_and_uv_normalise_names(self):
+        poetry = '[[package]]\nname = "PyCrypto"\nversion = "2.6.1"\n\n[[package]]\nname = "liboqs_python"\nversion = "0.10.0"\n'
+        f = self._by_id(self._scan({"poetry.lock": poetry}))
+        self.assertEqual(f["QSD001"].severity, "high")
+        self.assertTrue(f["QSD001"].title.endswith("(transitive)"))
+        self.assertIn("QSD011", f)
+
+    def test_pipfile_and_composer_lock(self):
+        pipfile = '{"default": {"ecdsa": {"hashes": ["sha256:abc"], "version": "==0.18.0"}}, "develop": {}}'
+        composer = '{"packages": [{"name": "phpseclib/phpseclib", "version": "3.0.37"}], "packages-dev": []}'
+        f = self._by_id(self._scan({"Pipfile.lock": pipfile, "composer.lock": composer}))
+        self.assertEqual(f["QSD003"].snippet, "ecdsa 0.18.0")
+        self.assertEqual(f["QSD601"].snippet, "phpseclib/phpseclib 3.0.37")
+
+    def test_cargo_go_gem_gradle(self):
+        f = self._by_id(self._scan({
+            "Cargo.lock": 'version = 3\n\n[[package]]\nname = "p256"\nversion = "0.13.2"\n',
+            "go.sum": "github.com/golang-jwt/jwt/v5 v5.2.1 h1:abc=\ngithub.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:def=\n",
+            "Gemfile.lock": "GEM\n  specs:\n    jwt (2.8.1)\n      base64\n\nPLATFORMS\n  ruby\n",
+            "gradle.lockfile": "org.bouncycastle:bcprov-jdk18on:1.78=runtimeClasspath\nempty=\n",
+        }))
+        self.assertEqual(f["QSD304"].snippet, "p256 0.13.2")
+        self.assertEqual(f["QSD202"].snippet, "github.com/golang-jwt/jwt/v5 v5.2.1")
+        self.assertEqual(f["QSD501"].snippet, "jwt 2.8.1")
+        self.assertIn("QSD401", f)
+
+    def test_lockfile_hashes_do_not_trigger_source_rules(self):
+        body = '{\n  "packages": {\n    "node_modules/left-pad": {\n      "version": "1.3.0",\n      "integrity": "sha1-md5RSA-DSA"\n    }\n  }\n}\n'
+        r = self._scan({"package-lock.json": body})
+        self.assertEqual(r.findings, [])
+
+    def test_malformed_lockfile_is_skipped(self):
+        r = self._scan({"Pipfile.lock": "{not json", "composer.lock": "[]"})
+        self.assertEqual(r.findings, [])
