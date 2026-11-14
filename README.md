@@ -67,6 +67,14 @@ Suppress a line you have reviewed by adding `quantumshield: ignore` in a comment
 | QS010 | SSLv2/v3, TLS 1.0/1.1 | medium | classical |
 | QS011 | Private key committed to source | critical | classical |
 | QS100 | Post-quantum algorithm referenced | info | pqc |
+| QS012 | RSA in TLS suites, signature schemes, key types, OIDs | high | quantum |
+| QS013 | Finite-field Diffie-Hellman (suites, groups, IKE, SSH) | high | quantum |
+| QS014 | DSA / DSS | high | quantum |
+| QS015 | Elliptic curve by curve name, key type or OID | high | quantum |
+| QS016 | Ed25519 / Ed448 / X25519 / X448 OIDs | high | quantum |
+| QS017 | DES, 3DES, RC4, RC2, MD4, SHA-1, MD5 by name | medium | classical |
+| QS018 | Algorithm inside a PEM block (generic labels decoded) | high | quantum |
+| QS101 | Post-quantum OIDs, LMS / XMSS, ML_KEM-style names | info | pqc |
 
 ### New in v0.2: dependency-level discovery
 
@@ -82,6 +90,16 @@ Manifests: `requirements*.txt`, `pyproject.toml`, `Pipfile`, `setup.cfg`, `packa
 | Post-quantum libraries (migration already started) | `liboqs-python`, `@noble/post-quantum`, `cloudflare/circl` | info |
 
 Rule IDs start with `QSD`. Try it: `python -m quantumshield scan examples/deps_demo`.
+
+### New in v0.4: measured against ShorList
+
+[ShorList](https://github.com/shorlist/shorlist) is an open catalogue of the forms in which public-key crypto appears in code and config, with decoys. On its quantum axis, line-exact hits went from **36.1% to 81.5%** (1465 rows), and decoys flagged by mistake from 66 to 41 (174 decoys).
+
+- Generic PEM labels (`PRIVATE KEY`, `PUBLIC KEY`, `CERTIFICATE`) are decoded and the algorithm OID inside is reported. Certificates report their signature algorithm.
+- New rules for TLS cipher suites, signature schemes, groups, OIDs, curve names and weak ciphers.
+- Mentions that are not uses are skipped: comments, removal or rejection messages, `"X": False`, and removals such as `-X25519MLKEM768` or `!kRSA`. Committed private keys are always reported.
+
+These are unofficial numbers from our own scoring script, and the v0.4 rules were written after reading the catalogue, so this is not a blind test. Details and how to reproduce: [bench/shorlist/RESULTS.md](bench/shorlist/RESULTS.md).
 
 ### New in v0.3: lockfiles, versions and transitive dependencies
 
@@ -110,7 +128,7 @@ Languages and files covered: Python, JavaScript/TypeScript, Java, Kotlin, Go, Ru
 ## Limitations (read this)
 
 - Detection is **pattern-based**, line by line. It does not parse code or follow data flow.
-- It can **miss** crypto used through wrappers or runtime configuration, and transitive dependencies when no lockfile is committed, and it can **flag** harmless code (for example a string in a comment).
+- It can **miss** crypto used through wrappers or runtime configuration, and transitive dependencies when no lockfile is committed. It skips lines that look like comments or removals, so a real use written on such a line can be missed, and it can still **flag** harmless mentions.
 - It does not scan compiled binaries, container images or network traffic.
 - A clean result does **not** prove a system is quantum-safe.
 - Severity reflects general guidance, not your specific threat model.
@@ -126,6 +144,7 @@ python -m unittest discover -s tests -t . -v
 - [x] v0.1 Pattern scanner, text/JSON/HTML reports, CI exit codes
 - [x] v0.2 Dependency manifest checks (Python, npm, Go, Rust, Java, Ruby, PHP)
 - [x] v0.3 Lockfiles: locked versions and transitive dependencies (npm, yarn, pnpm, Poetry, uv, PDM, Pipenv, Cargo, Go, Composer, Bundler, Gradle)
+- [x] v0.4 ShorList-driven rules, PEM decoding, not-a-use filter
 - [ ] Per-language parsing (Python AST)
 - [ ] v0.4 SARIF output and a reusable GitHub Action
 
