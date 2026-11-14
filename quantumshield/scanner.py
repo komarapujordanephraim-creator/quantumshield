@@ -9,6 +9,7 @@ from typing import Iterable, List
 
 from .rules import RULES, SEVERITY_ORDER
 from .deps import is_manifest, scan_manifest
+from .lockfiles import MAX_LOCKFILE_BYTES, is_lockfile, mark_transitive, scan_lockfile
 
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "node_modules", "venv", ".venv", "env",
@@ -65,7 +66,8 @@ class ScanResult:
 
 def _is_candidate(path: Path) -> bool:
     name = path.name.lower()
-    return path.suffix.lower() in TEXT_EXTENSIONS or name in TEXT_FILENAMES or is_manifest(name)
+    return (path.suffix.lower() in TEXT_EXTENSIONS or name in TEXT_FILENAMES
+            or is_manifest(name) or is_lockfile(name))
 
 
 def _looks_binary(sample: bytes) -> bool:
@@ -133,7 +135,9 @@ def scan_path(path: str, exclude: Iterable[str] = ()) -> ScanResult:
             result.files_skipped += 1
             continue
         try:
-            if full.stat().st_size > MAX_FILE_BYTES:
+            lockfile = is_lockfile(full.name)
+            limit = MAX_LOCKFILE_BYTES if lockfile else MAX_FILE_BYTES
+            if full.stat().st_size > limit:
                 result.files_skipped += 1
                 continue
             data = full.read_bytes()
@@ -145,9 +149,15 @@ def scan_path(path: str, exclude: Iterable[str] = ()) -> ScanResult:
             continue
         result.files_scanned += 1
         text = data.decode("utf-8", errors="replace")
+        if lockfile:
+            # Lockfiles hold names, versions and hashes, not code: skip the
+            # source rules (hashes cause false matches) and read packages.
+            result.findings.extend(scan_lockfile(text, display, Finding))
+            continue
         result.findings.extend(scan_text(text, display))
         if is_manifest(full.name):
             result.findings.extend(scan_manifest(text, display, Finding))
+    mark_transitive(result.findings)
     result.findings.sort(
         key=lambda f: (-SEVERITY_ORDER[f.severity], f.file, f.line, f.rule_id)
     )
