@@ -278,3 +278,60 @@ class LockfileTests(unittest.TestCase):
     def test_malformed_lockfile_is_skipped(self):
         r = self._scan({"Pipfile.lock": "{not json", "composer.lock": "[]"})
         self.assertEqual(r.findings, [])
+
+
+class V04RuleTests(unittest.TestCase):
+    """v0.4: rules derived from the ShorList catalogue, PEM decoding, not-a-use filter."""
+
+    def ids(self, text, name="x.txt"):
+        return {f.rule_id for f in scan_text(text, name)}
+
+    def test_tls_suites_and_groups(self):
+        self.assertIn("QS012", self.ids('CIPHER_SUITE = "TLS_RSA_WITH_AES_256_GCM_SHA384"\n'))
+        self.assertIn("QS013", self.ids('CIPHER_SUITE = "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"\n'))
+        self.assertIn("QS013", self.ids('TLS_GROUP = "ffdhe2048"\n'))
+        self.assertIn("QS015", self.ids('TLS_GROUP = "brainpoolP256r1"\n'))
+
+    def test_oids(self):
+        self.assertIn("QS012", self.ids('RSA_PSS = "1.2.840.113549.1.1.10"\n'))
+        self.assertIn("QS015", self.ids('CURVE = "1.3.132.0.34"\n'))
+        self.assertIn("QS016", self.ids('ED25519 = "1.3.101.112"\n'))
+        self.assertIn("QS101", self.ids('ML_KEM_768 = "2.16.840.1.101.3.4.4.2"\n'))
+
+    def test_ml_dsa_is_not_dsa(self):
+        ids = self.ids("CK_KEY_TYPE keyType = CKK_ML_DSA;\n")
+        self.assertNotIn("QS014", ids)
+        self.assertTrue({"QS100", "QS101"} & ids)
+        self.assertIn("QS014", self.ids("CK_KEY_TYPE keyType = CKK_DSA;\n"))
+
+    def test_weak_ciphers(self):
+        self.assertIn("QS017", self.ids('cipher = "DES-EDE3-CBC"\n'))
+        self.assertIn("QS017", self.ids("ssl_ciphers RC4-SHA;\n"))
+
+    def test_comments_and_removals_are_not_uses(self):
+        self.assertEqual(self.ids("# Removed in v3: rsa.generate_private_key(key_size=2048)\n"), set())
+        self.assertEqual(self.ids('ENABLED = {"Ed448": False}\n'), set())
+        self.assertEqual(self.ids('logging.warning("peer offered ecdsa_secp256r1_sha256; rejected by policy")\n'), set())
+        self.assertEqual(self.ids('SSL_CTX_set1_groups_list(ctx, "DEFAULT:-X25519MLKEM768");\n'), set())
+        # C preprocessor directives are uses, not comments
+        self.assertIn("QS015", self.ids("#define MBEDTLS_ECP_DP_SECP256R1_ENABLED\n"))
+
+    def test_committed_key_still_reported_in_comment_context(self):
+        self.assertIn("QS011", self.ids("# -----BEGIN RSA PRIVATE KEY-----\n"))
+
+    PEM_ED25519 = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA4ozyO8CexJ40WkpGIRUhiMsSEKwBQKotGPsOJo7Gvr0=\n-----END PUBLIC KEY-----\n'
+    PEM_EC_CERT = '-----BEGIN CERTIFICATE-----\nMIIBdDCCARmgAwIBAgIUTYzowLc309oes1kMfmpVcr0xEPowCgYIKoZIzj0EAwIw\nDzENMAsGA1UEAwwEdGVzdDAeFw0yNjExMTQwNDA1MDZaFw0yNjExMTUwNDA1MDZa\nMA8xDTALBgNVBAMMBHRlc3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQB0p9q\nB9lLStHbITO9eA3fb8PxGZaoBVAnva5ZMMBzs+mzTeVKwZCtJP6vcUPBk/dcHr/3\nDQhSV1QMORMy/Bnso1MwUTAdBgNVHQ4EFgQUwW3jY/n6iujMqWff/knh1wjuUggw\nHwYDVR0jBBgwFoAUwW3jY/n6iujMqWff/knh1wjuUggwDwYDVR0TAQH/BAUwAwEB\n/zAKBggqhkjOPQQDAgNJADBGAiEAvBRGznKMTsoHqHs68z80fBQG0/qyF0nntR20\nvsBkkjMCIQCISBnE//nUfHcvWNBBH0zEUWFjVESBRNGI//7g0kQkBA==\n-----END CERTIFICATE-----\n'
+    PEM_RSA_PUB = '-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDyv0e7Py8ZN4oSDjW41Bs5cAP4\nKQfxO1U60HG8PtkvxmkCbdCQhX8hPsHCBjUv/8jJuJGIaXF3mj9AQLgaprqZpPdd\nJhCWyXWDZhaONx2JEjTFf2eSS7dIKZwEVKxgAfc/E5A6kQLmX2BB1NEfHHN15O6+\nwBUSA85etGXfSs0VKwIDAQAB\n-----END PUBLIC KEY-----\n'
+
+    def _pem(self, text):
+        return [(f.line, f.title) for f in scan_text(text, "k.pem") if f.rule_id == "QS018"]
+
+    def test_generic_pem_labels_are_decoded(self):
+        self.assertEqual(self._pem(self.PEM_ED25519), [(1, "EdDSA key inside PEM block (PUBLIC KEY)")])
+        self.assertEqual(self._pem(self.PEM_RSA_PUB), [(1, "RSA key inside PEM block (PUBLIC KEY)")])
+        # certificates report the signature algorithm
+        self.assertEqual(self._pem(self.PEM_EC_CERT), [(1, "ECDSA key inside PEM block (CERTIFICATE)")])
+
+    def test_pem_line_number_inside_file(self):
+        text = "config:\n  key: |\n" + self.PEM_ED25519
+        self.assertEqual(self._pem(text)[0][0], 3)
