@@ -138,10 +138,11 @@ def scan_text(text: str, display_name: str) -> List[Finding]:
     """Scan a block of text and return findings."""
     findings: List[Finding] = []
     pem_rule = RULES_BY_ID["QS018"]
-    for lineno, label, fam in pem_blocks(text):
+    for lineno, label, kind, fam in pem_blocks(text):
         pqc = fam in ("ML-KEM", "ML-DSA", "SLH-DSA")
+        what = "key" if kind == "key" else f"certificate {kind}"
         findings.append(Finding(
-            rule_id="QS018", title=f"{fam} key inside PEM block ({label})",
+            rule_id="QS018", title=f"{fam} {what} inside PEM block ({label})",
             severity="info" if pqc else pem_rule.severity, category="pqc" if pqc else "quantum",
             file=display_name, line=lineno, snippet=f"-----BEGIN {label}----- ({fam})",
             why=pem_rule.why if not pqc else "Post-quantum key: migration has started here.",
