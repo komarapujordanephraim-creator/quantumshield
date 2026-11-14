@@ -95,7 +95,7 @@ Rule IDs start with `QSD`. Try it: `python -m quantumshield scan examples/deps_d
 
 [ShorList](https://github.com/shorlist/shorlist) is an open catalogue of the forms in which public-key crypto appears in code and config, with decoys. On its quantum axis, line-exact hits went from **36.1% to 81.5%** (1465 rows), and decoys flagged by mistake from 66 to 41 (174 decoys).
 
-- Generic PEM labels (`PRIVATE KEY`, `PUBLIC KEY`, `CERTIFICATE`) are decoded and the algorithm OID inside is reported. Certificates report their signature algorithm.
+- Generic PEM labels (`PRIVATE KEY`, `PUBLIC KEY`, `CERTIFICATE`) are decoded and the algorithm OID inside is reported. Certificates report the signature algorithm and the subject key as separate findings.
 - New rules for TLS cipher suites, signature schemes, groups, OIDs, curve names and weak ciphers.
 - Mentions that are not uses are skipped: comments, removal or rejection messages, `"X": False`, and removals such as `-X25519MLKEM768` or `!kRSA`. Committed private keys are always reported.
 
