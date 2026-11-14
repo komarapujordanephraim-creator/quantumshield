@@ -193,6 +193,92 @@ RULES = [
         "where appropriate.",
         "No action required from this finding.",
     ),
+    # ---- v0.4: rules derived from the forms catalogued by ShorList -------------
+    _rule(
+        "QS012",
+        "RSA in TLS suites, signature schemes, key types or OIDs",
+        "high",
+        "quantum",
+        r"\bTLS_(SRP_SHA_)?RSA_|_RSA_WITH_|\brsa_(pss|pkcs1)_|SHA\d+[-_]?with[-_]?RSA|\bRSA[_-]?(PSS|OAEP|SIGN|DECRYPT|ENCRYPT|KEM|\d{4})"
+        r"|EVP_PKEY_RSA|\bCK[KM]_RSA|PSA_(ALG|KEY_TYPE)_RSA|\brsa_(bits|keygen)|key[-_]?type[=:\s]+['\"]?RSA"
+        r"|-keyalg\s+RSA|\bkty['\"]?\s*[:=]\s*['\"]?RSA|rsaEncryption|\.rsa(Encryption|Signature)|\brsa::"
+        r"|RSASSA|RSAES|rsa-sha2-\d+|KEYTYPE_RSA|1\.2\.840\.113549\.1\.1\.\d+|['\"]RSA['\"]|\b(pss|oaep|pkcs1_15|PKCS1_OAEP|PKCS1_v1_5)\.new\("
+        r"|-----BEGIN RSA (PUBLIC|PRIVATE) KEY-----",
+        "RSA relies on integer factoring, which Shor's algorithm solves on a large quantum computer.",
+        "Plan migration to ML-KEM (FIPS 203) and ML-DSA (FIPS 204); use hybrid modes during transition. " + NIST_NOTE,
+    ),
+    _rule(
+        "QS013",
+        "Finite-field Diffie-Hellman (TLS suites, groups, IKE, SSH)",
+        "high",
+        "quantum",
+        r"\bTLS_DHE?_|\bDHE?_(RSA|DSS|PSK|anon)_|ffdhe\d+|\bmodp\d+|MODP Group|diffie-hellman-group|\bdh[-_]group"
+        r"|\bCK[KM]_(X9_42_)?DH|EVP_PKEY_DH\b|dhKeyAgreement|1\.2\.840\.113549\.1\.3\.1|1\.2\.840\.10046\.2\.1"
+        r"|-----BEGIN (X9\.42 )?DH PARAMETERS-----|KEYTYPE_DH\b|DH::create|\bDH\.(generate|new)",
+        "Finite-field Diffie-Hellman relies on discrete logarithms, which Shor's algorithm solves.",
+        "Move key exchange to ML-KEM, or hybrid X25519MLKEM768 in TLS 1.3. " + NIST_NOTE,
+    ),
+    _rule(
+        "QS014",
+        "DSA / DSS",
+        "high",
+        "quantum",
+        r"(?<!ML[-_])(?<!SLH[-_])(?<![A-Za-z0-9-])DSA(?![A-Za-z])|(?<![A-Za-z0-9])DSS(?![A-Za-z0-9])|\bCK[KM]_DSA|EVP_PKEY_DSA|dsa_paramgen"
+        r"|dsaEncryption|\bdsa\.Generate|-----BEGIN DSA|KEYTYPE_DSA|1\.2\.840\.10040\.4\.[13]|1\.3\.14\.3\.2\.(12|27)|ssh-dss",
+        "DSA relies on discrete logarithms, which Shor's algorithm solves. It is also disallowed for new signatures by FIPS 186-5.",
+        "Replace with ML-DSA (FIPS 204) or SLH-DSA (FIPS 205). " + NIST_NOTE,
+    ),
+    _rule(
+        "QS015",
+        "Elliptic curve named by curve, key type or OID",
+        "high",
+        "quantum",
+        r"brainpoolP\d+[rt]1|\bsec[pt]\d+[rk]\d\b|\bsect\d+|\bansi[px]\d+|(?<![A-Za-z0-9])[PKB]-(163|192|224|233|256|283|384|409|521|571)K?\b"
+        r"|ECC_NIST_P\d+|ECC_SECG|EC_SIGN_P\d+|\bP(256|384|521)\b|\bES256K\b|\bprime(192|239|256)v\d|MBEDTLS_ECP_DP_|PSA_(KEY_TYPE|ECC_FAMILY)_|EVP_PKEY_EC\b|\bCK[KM]_EC"
+        r"|key[-_]?type=ec\b|--?kty\s+EC|-keyalg\s+ec\b|\bkty['\"]?\s*[:=]\s*['\"]?EC|id-ecPublicKey|1\.2\.840\.10045\.|1\.3\.132\.0\.\d+"
+        r"|(?<![A-Za-z0-9])SM2(?![A-Za-z0-9])|\bCurve\d{3,}|nistp\d{3}|KEYTYPE_EC\b|-----BEGIN EC (PRIVATE KEY|PARAMETERS)-----|\bcurve448|\bcurve25519",
+        "Elliptic-curve cryptography relies on discrete logarithms over curves, which Shor's algorithm solves.",
+        "Plan migration to ML-KEM (FIPS 203) / ML-DSA (FIPS 204); use hybrid modes during transition. " + NIST_NOTE,
+    ),
+    _rule(
+        "QS016",
+        "Edwards / Montgomery curve OID (Ed25519, Ed448, X25519, X448)",
+        "high",
+        "quantum",
+        r"1\.3\.101\.11[0-3]\b",
+        "These curves are broken by Shor's algorithm like any elliptic curve.",
+        "Plan migration to ML-KEM / ML-DSA. " + NIST_NOTE,
+    ),
+    _rule(
+        "QS017",
+        "Weak cipher or hash (DES, 3DES, RC4, RC2, MD4, SHA-1 in suites)",
+        "medium",
+        "classical",
+        r"\b3DES\b|DES[-_]?EDE|TripleDES|DESede|(?<![A-Za-z0-9])DES[-_](CBC|ECB)|\bRC4\b|ARCFOUR|(?<![A-Za-z0-9])RC2(?![A-Za-z0-9])|\bMD4\b"
+        r"|\bSHA-?1\b|SHA1(?=with|_|\b)|_SHA\b|\bMD5\b|_MD5\b",
+        "These algorithms are broken or disallowed today, without any quantum computer.",
+        "Use AES-GCM or ChaCha20-Poly1305, and SHA-256 or stronger.",
+    ),
+    _rule(
+        "QS101",
+        "Post-quantum algorithm referenced (OID or stateful hash-based signature)",
+        "info",
+        "pqc",
+        r"2\.16\.840\.1\.101\.3\.4\.(4\.[1-3]|3\.(1[7-9]|2\d|3[01]))\b|(?<![A-Za-z0-9])(LMS|HSS)(?![A-Za-z])|\bXMSS(MT)?\b|hss-lms|1\.2\.840\.113549\.1\.9\.16\.3\.17"
+        r"|\bMLKEM\d*|\bMLDSA\d*|\bSLHDSA|slh-?dsa|ML_KEM|ML_DSA|SLH_DSA|-PQ-20\d\d|0x60,\s*0x86,\s*0x48,\s*0x01,\s*0x65,\s*0x03,\s*0x04,\s*0x0[34]",
+        "Informational: the code references a post-quantum algorithm.",
+        "No action required from this finding.",
+    ),
+    _rule(
+        "QS018",
+        "Public-key algorithm inside a PEM block",
+        "high",
+        "quantum",
+        r"(?!x)x",  # produced by the PEM decoder in scanner.py, not by a line pattern
+        "The PEM block holds a key or certificate for an algorithm that Shor's algorithm breaks. "
+        "Generic labels (PRIVATE KEY, PUBLIC KEY, CERTIFICATE) hide the algorithm; QuantumShield reads the OID inside.",
+        "Add the key or certificate to your cryptographic inventory and plan its replacement with ML-KEM / ML-DSA. " + NIST_NOTE,
+    ),
 ]
 
 RULES_BY_ID = {r.rule_id: r for r in RULES}
