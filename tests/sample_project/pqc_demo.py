@@ -1,2 +1,2 @@
-# Uses ML-KEM via liboqs for key establishment (demo reference only)
+KEM_ALG = "ML-KEM-768"  # via liboqs, demo reference only
 print("pqc demo")
