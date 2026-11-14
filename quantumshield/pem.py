@@ -5,8 +5,8 @@ algorithm the key uses. A scanner that only matches labels such as
 "RSA PRIVATE KEY" misses them, and the inventory looks cleaner than it is.
 
 This module base64-decodes each block and looks for the DER-encoded OID of the
-key algorithm. For certificates the subject public key OID is reported, not the
-signature algorithm. Encrypted private keys cannot be read and are skipped.
+key algorithm. For certificates both the signature algorithm and the subject public key
+algorithm are reported, as separate findings. Encrypted private keys cannot be read and are skipped.
 Standard library only.
 """
 
@@ -71,26 +71,39 @@ def _cert_family(der: bytes) -> str:
     return min(hits)[1] if hits else ""
 
 
-def _family(der: bytes, label: str) -> str:
+def _key_family(der: bytes, last: bool = False) -> str:
+    """Family of the key algorithm OID: the first one in a key, the last (SPKI) in a certificate."""
+    pq = _pqc_family(der)
+    if pq and not last:
+        return pq
+    pick = der.rfind if last else der.find
+    hits = [(pick(oid), fam) for oid, fam in _KEY_OIDS if pick(oid) != -1]
+    if hits:
+        return (max if last else min)(hits)[1]
+    return pq
+
+
+def _families(der: bytes, label: str) -> List[Tuple[str, str]]:
+    """(kind, family) pairs. Certificates give the signature algorithm and the subject key."""
     if "CERTIFICATE" in label:
+        out = []
         sig = _cert_family(der)
         if sig:
-            return sig
-        # skip to the SubjectPublicKeyInfo: the last key OID before the public key bits
-        hits = [(der.rfind(oid), fam) for oid, fam in _KEY_OIDS if der.rfind(oid) != -1]
-        pq = _pqc_family(der)
-        if hits:
-            return max(hits)[1]
-        return pq
-    pq = _pqc_family(der)
-    if pq:
-        return pq
-    hits = [(der.find(oid), fam) for oid, fam in _KEY_OIDS if der.find(oid) != -1]
-    return min(hits)[1] if hits else ""
+            out.append(("signature", sig))
+        key = _key_family(der, last=True)
+        if key:
+            out.append(("subject key", key))
+        return out
+    fam = _key_family(der)
+    return [("key", fam)] if fam else []
 
 
-def pem_blocks(text: str) -> List[Tuple[int, str, str]]:
-    """Return (line number of BEGIN, label, family) for each readable PEM block."""
+def pem_blocks(text: str) -> List[Tuple[int, str, str, str]]:
+    """Return (line of BEGIN, label, kind, family) for each algorithm found in a readable PEM block.
+
+    kind is "key" for keys, and "signature" / "subject key" for certificates, so a
+    post-quantum leaf key signed by a classical CA shows up as two separate entries.
+    """
     out = []
     lines = text.splitlines()
     i = 0
@@ -113,7 +126,6 @@ def pem_blocks(text: str) -> List[Tuple[int, str, str]]:
             der = base64.b64decode("".join(body), validate=False)
         except (binascii.Error, ValueError):
             continue
-        fam = _family(der, label)
-        if fam:
-            out.append((start, label, fam))
+        for kind, fam in _families(der, label):
+            out.append((start, label, kind, fam))
     return out
