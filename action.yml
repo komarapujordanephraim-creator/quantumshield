@@ -1,0 +1,41 @@
+name: "QuantumShield Scan"
+description: "Scan a codebase for quantum-vulnerable and weak cryptography and upload the results to GitHub code scanning as SARIF."
+author: "Komarapu Jordan Ephraim"
+branding:
+  icon: "shield"
+  color: "purple"
+inputs:
+  path:
+    description: "Path to scan."
+    required: false
+    default: "."
+  fail-on:
+    description: "Fail the job if a finding at this level or higher exists (critical, high, medium, low, none)."
+    required: false
+    default: "none"
+  sarif-file:
+    description: "Where to write the SARIF file."
+    required: false
+    default: "quantumshield.sarif"
+  upload-sarif:
+    description: "Upload the SARIF file to GitHub code scanning."
+    required: false
+    default: "true"
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install QuantumShield
+      shell: bash
+      run: pip install "git+https://github.com/komarapujordanephraim-creator/quantumshield@main"
+    - name: Run QuantumShield
+      shell: bash
+      run: python -m quantumshield scan "${{ inputs.path }}" --sarif "${{ inputs.sarif-file }}" --fail-on "${{ inputs.fail-on }}"
+    - name: Upload SARIF to code scanning
+      if: ${{ always() && inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
