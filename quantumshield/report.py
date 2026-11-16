@@ -115,6 +115,64 @@ def json_report(result: ScanResult) -> str:
     return json.dumps(payload, indent=2)
 
 
+# ---------------------------------------------------------------- sarif
+
+_SARIF_LEVEL = {
+    "critical": "error", "high": "error",
+    "medium": "warning", "low": "note", "info": "note",
+}
+# A numeric score (0.0-10.0) that GitHub code scanning uses to sort/colour.
+_SARIF_SECURITY_SEVERITY = {
+    "critical": "9.5", "high": "8.0", "medium": "5.0",
+    "low": "3.0", "info": "1.0",
+}
+
+
+def sarif_report(result: ScanResult) -> str:
+    """Return findings as SARIF 2.1.0 JSON (GitHub code scanning compatible)."""
+    rules = {}
+    sarif_results = []
+    for f in result.findings:
+        if f.rule_id not in rules:
+            rules[f.rule_id] = {
+                "id": f.rule_id,
+                "name": f.title,
+                "shortDescription": {"text": f.title},
+                "fullDescription": {"text": f.why},
+                "help": {"text": f"{f.why}\n\nFix: {f.fix}"},
+                "defaultConfiguration": {"level": _SARIF_LEVEL.get(f.severity, "note")},
+                "properties": {
+                    "tags": ["cryptography", f.category],
+                    "security-severity": _SARIF_SECURITY_SEVERITY.get(f.severity, "1.0"),
+                },
+            }
+        sarif_results.append({
+            "ruleId": f.rule_id,
+            "level": _SARIF_LEVEL.get(f.severity, "note"),
+            "message": {"text": f"{f.title}: {f.snippet}"},
+            "locations": [{
+                "physicalLocation": {
+                    "artifactLocation": {"uri": f.file},
+                    "region": {"startLine": max(1, f.line)},
+                }
+            }],
+        })
+    doc = {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {
+                "name": "QuantumShield",
+                "version": __version__,
+                "informationUri": "https://github.com/komarapujordanephraim-creator/quantumshield",
+                "rules": list(rules.values()),
+            }},
+            "results": sarif_results,
+        }],
+    }
+    return json.dumps(doc, indent=2)
+
+
 # ---------------------------------------------------------------- html
 
 SEV_VAR = {
