@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .report import html_report, json_report, text_report
+from .report import html_report, json_report, sarif_report, text_report
 from .rules import SEVERITY_ORDER
 from .scanner import scan_path
 
@@ -25,9 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     scan = sub.add_parser("scan", help="scan a file or directory")
     scan.add_argument("path", help="file or directory to scan")
-    scan.add_argument("--format", choices=["text", "json"], default="text",
-                      help="console output format (default: text)")
+    scan.add_argument("--format", choices=["text", "json", "sarif"], default="text",
+                      help="console output format: text, json or sarif (default: text)")
     scan.add_argument("--html", metavar="FILE", help="also write a standalone HTML report")
+    scan.add_argument("--sarif", metavar="FILE", help="also write a SARIF 2.1.0 file for GitHub code scanning")
     scan.add_argument("--exclude", action="append", default=[], metavar="NAME",
                       help="directory name or relative path to skip (repeatable)")
     scan.add_argument("--fail-on", choices=FAIL_CHOICES, default="high",
@@ -59,6 +60,8 @@ def main(argv=None) -> int:
 
     if args.format == "json":
         print(json_report(result))
+    elif args.format == "sarif":
+        print(sarif_report(result))
     else:
         use_color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
         sys.stdout.write(text_report(result, color=use_color))
@@ -66,5 +69,9 @@ def main(argv=None) -> int:
     if args.html:
         Path(args.html).write_text(html_report(result), encoding="utf-8")
         print(f"HTML report written to {args.html}", file=sys.stderr)
+
+    if args.sarif:
+        Path(args.sarif).write_text(sarif_report(result), encoding="utf-8")
+        print(f"SARIF report written to {args.sarif}", file=sys.stderr)
 
     return 1 if _should_fail(result, args.fail_on) else 0
