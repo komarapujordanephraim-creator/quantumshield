@@ -29,6 +29,7 @@ cd quantumshield
 python -m quantumshield scan path/to/your/project
 python -m quantumshield scan path/to/your/project --html report.html
 python -m quantumshield scan path/to/your/project --format json > report.json
+python -m quantumshield scan path/to/your/project --sarif results.sarif
 ```
 
 Optional install as a command:
@@ -44,6 +45,7 @@ quantumshield scan .
 |---|---|
 | `--html FILE` | Write a standalone HTML report |
 | `--format json` | Print machine-readable JSON |
+| `--format sarif` / `--sarif FILE` | SARIF 2.1.0 for GitHub code scanning |
 | `--exclude NAME` | Skip a directory or relative path (repeatable) |
 | `--fail-on LEVEL` | Exit code 1 if a finding at this level or higher exists (`critical`, `high`, `medium`, `low`, `none`). Default `high` |
 
@@ -146,7 +148,8 @@ python -m unittest discover -s tests -t . -v
 - [x] v0.3 Lockfiles: locked versions and transitive dependencies (npm, yarn, pnpm, Poetry, uv, PDM, Pipenv, Cargo, Go, Composer, Bundler, Gradle)
 - [x] v0.4 ShorList-driven rules, PEM decoding, not-a-use filter
 - [ ] Per-language parsing (Python AST)
-- [ ] v0.4 SARIF output and a reusable GitHub Action
+- [x] v0.5 SARIF 2.1.0 output (GitHub code scanning)
+- [ ] A reusable GitHub Action
 
 ## Credits and license
 
