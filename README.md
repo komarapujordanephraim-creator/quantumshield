@@ -39,6 +39,29 @@ pip install -e .
 quantumshield scan .
 ```
 
+## Use it in GitHub Actions
+
+QuantumShield ships a reusable composite action. Add this workflow to scan on every push and send findings to the Security tab:
+
+```yaml
+name: QuantumShield
+on: [push, pull_request]
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: komarapujordanephraim-creator/quantumshield@main
+        with:
+          path: .
+          fail-on: none
+```
+
+Inputs: `path` (default `.`), `fail-on` (`critical`/`high`/`medium`/`low`/`none`, default `none`), `sarif-file` (default `quantumshield.sarif`), `upload-sarif` (default `true`). Results appear under **Security → Code scanning**.
+
 ## Options
 
 | Option | Meaning |
@@ -149,7 +172,7 @@ python -m unittest discover -s tests -t . -v
 - [x] v0.4 ShorList-driven rules, PEM decoding, not-a-use filter
 - [ ] Per-language parsing (Python AST)
 - [x] v0.5 SARIF 2.1.0 output (GitHub code scanning)
-- [ ] A reusable GitHub Action
+- [x] v0.5 A reusable GitHub Action (composite, uploads SARIF to code scanning)
 
 ## Credits and license
 
