@@ -336,3 +336,35 @@ class V04RuleTests(unittest.TestCase):
     def test_pem_line_number_inside_file(self):
         text = "config:\n  key: |\n" + self.PEM_ED25519
         self.assertEqual(self._pem(text)[0][0], 3)
+
+
+class SarifReportTests(unittest.TestCase):
+    def _result(self):
+        import tempfile, os
+        from quantumshield.scanner import scan_path
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "app.py"), "w") as fh:
+                fh.write("from Crypto.PublicKey import RSA\nkey = RSA.generate(1024)\n")
+            return scan_path(d)
+
+    def test_sarif_is_valid_shape(self):
+        import json
+        from quantumshield.report import sarif_report
+        doc = json.loads(sarif_report(self._result()))
+        self.assertEqual(doc["version"], "2.1.0")
+        self.assertEqual(len(doc["runs"]), 1)
+        run = doc["runs"][0]
+        self.assertEqual(run["tool"]["driver"]["name"], "QuantumShield")
+        self.assertTrue(run["tool"]["driver"]["rules"])
+        self.assertTrue(run["results"])
+
+    def test_sarif_result_links_to_a_declared_rule(self):
+        import json
+        from quantumshield.report import sarif_report
+        run = json.loads(sarif_report(self._result()))["runs"][0]
+        rule_ids = {r["id"] for r in run["tool"]["driver"]["rules"]}
+        for res in run["results"]:
+            self.assertIn(res["ruleId"], rule_ids)
+            self.assertIn(res["level"], {"error", "warning", "note"})
+            region = res["locations"][0]["physicalLocation"]["region"]
+            self.assertGreaterEqual(region["startLine"], 1)
